@@ -1,7 +1,5 @@
 package com.cv.leafavoapp.ui.screen.detection
 
-
-
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.compose.ui.geometry.Size
@@ -19,6 +17,8 @@ class DetectionViewModel(
     private val _detections = MutableStateFlow<List<DetectionResult>>(emptyList())
     val detections: StateFlow<List<DetectionResult>> = _detections
 
+    // _imageSize sekarang akan menyimpan dimensi gambar *setelah* memperhitungkan rotasi kamera,
+    // yaitu dimensi gambar yang sebenarnya dilihat oleh model deteksi.
     private val _imageSize = MutableStateFlow(Size(0f, 0f))
     val imageSize: StateFlow<Size> = _imageSize
 
@@ -27,8 +27,17 @@ class DetectionViewModel(
     }
 
     private fun processImage(imageProxy: ImageProxy) {
-        // Update ukuran image di setiap frame
-        _imageSize.value = Size(imageProxy.width.toFloat(), imageProxy.height.toFloat())
+        val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+        val sourceWidth = imageProxy.width.toFloat()
+        val sourceHeight = imageProxy.height.toFloat()
+
+        // Sesuaikan imageSize berdasarkan rotasi. Bounding box dari model
+        // akan relatif terhadap dimensi gambar yang sudah dirotasi.
+        if (rotationDegrees == 90 || rotationDegrees == 270) {
+            _imageSize.value = Size(sourceHeight, sourceWidth) // Lebar dan tinggi ditukar
+        } else {
+            _imageSize.value = Size(sourceWidth, sourceHeight)
+        }
 
         val results = detectorHelper.detect(imageProxy)
         viewModelScope.launch {
@@ -37,7 +46,3 @@ class DetectionViewModel(
         imageProxy.close()
     }
 }
-
-
-
-

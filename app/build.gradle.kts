@@ -72,8 +72,8 @@ dependencies {
 //    implementation(libs.play.services.tflite.gpu)
     implementation ("org.tensorflow:tensorflow-lite:2.14.0")
     ksp("androidx.room:room-compiler:2.6.1")
-    implementation("org.tensorflow:tensorflow-lite-gpu-delegate-plugin:0.4.0")
     implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
+    implementation("org.tensorflow:tensorflow-lite-task-vision:0.4.0")
     implementation(libs.androidx.room.ktx)
 
     implementation(libs.coil.compose)

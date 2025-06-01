@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlin.math.max // Import 'max'
 
 @Composable
 fun DetectionScreen() {
@@ -21,8 +22,8 @@ fun DetectionScreen() {
         factory = DetectionViewModelFactory(detectorHelper)
     )
 
-    val detections = viewModel.detections.collectAsState()
-    val imageSize = viewModel.imageSize.collectAsState() // Ambil ukuran frame kamera
+    val detectionsState = viewModel.detections.collectAsState()
+    val imageSizeState = viewModel.imageSize.collectAsState() // Ukuran frame kamera (setelah rotasi)
 
     Box(modifier = Modifier.fillMaxSize()) {
         CameraPreview(
@@ -31,37 +32,61 @@ fun DetectionScreen() {
         )
 
         Canvas(modifier = Modifier.fillMaxSize()) {
-            // Dapatkan ukuran Canvas (layar)
             val canvasWidth = size.width
             val canvasHeight = size.height
 
-            // Hitung scaling factor
-            val scaleX = if (imageSize.value.width != 0f) canvasWidth / imageSize.value.width else 1f
-            val scaleY = if (imageSize.value.height != 0f) canvasHeight / imageSize.value.height else 1f
+            val modelInputWidth = imageSizeState.value.width
+            val modelInputHeight = imageSizeState.value.height
 
-            detections.value.forEach { detection ->
-                val left = detection.boundingBox.left * scaleX
-                val top = detection.boundingBox.top * scaleY
-                val width = detection.boundingBox.width() * scaleX
-                val height = detection.boundingBox.height() * scaleY
+            if (modelInputWidth > 0f && modelInputHeight > 0f) {
+                // Hitung scaleFactor untuk menyesuaikan gambar input model ke ukuran Canvas
+                // sambil mempertahankan aspek rasio. Ini meniru perilaku FILL_CENTER
+                // dari PreviewView, di mana gambar mungkin di-crop agar pas.
+                val scaleFactor = max(canvasWidth / modelInputWidth, canvasHeight / modelInputHeight)
 
-                drawRect(
-                    color = Color.Red,
-                    topLeft = Offset(left, top),
-                    size = androidx.compose.ui.geometry.Size(width, height),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 7f)
-                )
+                // Lebar dan tinggi gambar model setelah diskalakan
+                val scaledImageWidth = modelInputWidth * scaleFactor
+                val scaledImageHeight = modelInputHeight * scaleFactor
 
-                drawContext.canvas.nativeCanvas.apply {
-                    drawText(
-                        "${detection.label} ${(detection.score * 100).toInt()}%",
-                        left,
-                        top - 10f,
-                        android.graphics.Paint().apply {
-                            color = android.graphics.Color.RED
-                            textSize = 70f
-                        }
+                // Hitung offset untuk memusatkan gambar yang diskalakan di dalam Canvas.
+                // Jika gambar di-crop, salah satu offset ini bisa negatif atau nol.
+                val offsetX = (canvasWidth - scaledImageWidth) / 2f
+                val offsetY = (canvasHeight - scaledImageHeight) / 2f
+
+                detectionsState.value.forEach { detection ->
+                    val boundingBox = detection.boundingBox
+
+                    // Transformasikan koordinat bounding box dari ruang gambar model
+                    // ke ruang Canvas.
+                    val drawLeft = boundingBox.left * scaleFactor + offsetX
+                    val drawTop = boundingBox.top * scaleFactor + offsetY
+                    // val drawRight = boundingBox.right * scaleFactor + offsetX // Alternatif jika butuh right & bottom
+                    // val drawBottom = boundingBox.bottom * scaleFactor + offsetY
+
+                    val rectWidth = boundingBox.width() * scaleFactor
+                    val rectHeight = boundingBox.height() * scaleFactor
+
+                    // Gambar kotak pembatas
+                    drawRect(
+                        color = Color.Red,
+                        topLeft = Offset(drawLeft, drawTop),
+                        size = androidx.compose.ui.geometry.Size(rectWidth, rectHeight),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 7f) // Anda bisa sesuaikan ketebalan garis
                     )
+
+                    // Gambar label dan skor
+                    drawContext.canvas.nativeCanvas.apply {
+                        drawText(
+                            "${detection.label} ${(detection.score * 100).toInt()}%",
+                            drawLeft, // Posisi teks dekat dengan kiri-atas kotak
+                            drawTop - 10f, // Sedikit di atas kotak
+                            android.graphics.Paint().apply {
+                                color = android.graphics.Color.RED
+                                textSize = 70f // Anda bisa sesuaikan ukuran teks
+                                // Pertimbangkan menambahkan latar belakang pada teks agar lebih mudah terbaca
+                            }
+                        )
+                    }
                 }
             }
         }

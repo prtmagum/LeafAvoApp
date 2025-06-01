@@ -179,7 +179,7 @@ fun DeveloperScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = "NIM Mahasiswa",
+                                    text = "NIM",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
