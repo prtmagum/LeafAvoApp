@@ -71,17 +71,14 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavHostController
 import com.cv.leafavoapp.R
-import com.cv.leafavoapp.ml.Leafavo
 import com.cv.leafavoapp.ui.DataStoreHelper
 import com.cv.leafavoapp.ui.navigation.Screen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import org.tensorflow.lite.DataType
-import org.tensorflow.lite.support.common.ops.NormalizeOp
-import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
-import org.tensorflow.lite.support.image.ops.ResizeOp
-import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
+import org.tensorflow.lite.task.core.BaseOptions
+import org.tensorflow.lite.task.vision.detector.Detection
+import org.tensorflow.lite.task.vision.detector.ObjectDetector
 
 @Composable
 fun ScanScreen(
@@ -589,52 +586,63 @@ fun scaleBitmapDown(bitmap: Bitmap, maxDimension: Int): Bitmap {
 }
 
 
-fun predictImage(context: android.content.Context, bitmap: Bitmap): Pair<String, String> {
-    val labels = try {
-        context.assets.open("labels.txt").bufferedReader().readLines()
-    } catch (e: Exception) {
-        Log.e("ScanScreen", "Gagal memuat labels.txt untuk klasifikasi: ${e.message}")
-        return Pair("Error", "Label tidak ditemukan")
-    }
+fun predictImage(context: Context, bitmap: Bitmap): Pair<String, String> {
+    val modelName = "model_object_detection_avo.tflite" // Pastikan nama file ini benar
 
-    val imageProcessor = ImageProcessor.Builder()
-        .add(ResizeOp(224, 224, ResizeOp.ResizeMethod.NEAREST_NEIGHBOR))
-        .add(NormalizeOp(0.0f, 255.0f))
+    // 1. Konfigurasi options untuk Object Detector
+    val options = ObjectDetector.ObjectDetectorOptions.builder()
+        .setBaseOptions(BaseOptions.builder().build())
+        .setScoreThreshold(0.5f) // Ambang batas kepercayaan, bisa disesuaikan (misal: 0.5f = 50%)
+        .setMaxResults(3) // Maksimal jumlah objek yang dideteksi
         .build()
 
-    var tensorImage = TensorImage(DataType.FLOAT32)
-    tensorImage.load(bitmap)
-    tensorImage = imageProcessor.process(tensorImage)
+    try {
+        // 2. Buat instance ObjectDetector dari file model dan options
+        // Library ini akan otomatis membaca label dari metadata model jika ada
+        val objectDetector = ObjectDetector.createFromFileAndOptions(context, modelName, options)
 
-    val model = Leafavo.newInstance(context) // Pastikan Leafavo sudah benar
+        // 3. Konversi Bitmap ke TensorImage
+        val tensorImage = TensorImage.fromBitmap(bitmap)
 
-    val inputFeature0 = TensorBuffer.createFixedSize(intArrayOf(1, 224, 224, 3), DataType.FLOAT32)
-    inputFeature0.loadBuffer(tensorImage.buffer)
+        // 4. Jalankan deteksi
+        val results: List<Detection> = objectDetector.detect(tensorImage)
 
-    val outputs = model.process(inputFeature0)
-    val outputFeature0 = outputs.outputFeature0AsTensorBuffer.floatArray
+        // 5. Proses hasil deteksi untuk meniru klasifikasi
+        if (results.isEmpty()) {
+            return Pair("Tidak Dikenali", "Tidak ada objek daun yang terdeteksi pada gambar.")
+        } else {
+            // Ambil deteksi dengan skor tertinggi
+            val bestDetection = results.maxByOrNull { it.categories.first().score }
 
-    model.close()
+            if (bestDetection != null) {
+                val category = bestDetection.categories.first()
+                val label = category.label
+                val score = category.score
+                val description = getDescription(label) // Menggunakan fungsi getDescription Anda yang sudah ada
 
-    val maxIdx = outputFeature0.indices.maxByOrNull { outputFeature0[it] } ?: -1
-    val maxProbability = if (maxIdx != -1) outputFeature0[maxIdx] else 0.0f
+                val resultString = "$label (%.2f%%)".format(score * 100)
+                return Pair(resultString, description)
+            } else {
+                return Pair("Tidak Dikenali", "Gagal memproses hasil deteksi.")
+            }
+        }
 
-    val threshold = 0.8f
-    return if (maxIdx == -1 || maxProbability < threshold) {
-        Pair("Tidak Dikenali", "Probabilitas: %.2f%%".format(maxProbability * 100))
-    } else {
-        val label = if (maxIdx < labels.size) labels[maxIdx] else "Label Indeks Salah"
-        val description = getDescription(label)
-        Pair("$label (%.2f%%)".format(maxProbability * 100), description)
+    } catch (e: Exception) {
+        // Tangani error, misal model tidak ditemukan atau tidak kompatibel
+        Log.e("ScanScreen-ObjectDetection", "Error during object detection", e)
+        return Pair("Error", "Gagal melakukan deteksi: ${e.message}")
     }
 }
 
+
 fun getDescription(label: String): String {
-    return when (label) {
-        "aligator" -> "Ciri daun nya yaitu bagian tepinya bergelombang atau tidak rat."
-        "kendil" -> "Daun Kendil (Polyscias scutellaria) sering digunakan sebagai ramuan obat tradisional dan memiliki bentuk yang khas dengan tepi bergerigi."
-        "mentega" -> "Daun Mentega (Sauropus androgynus) atau katuk memiliki kandungan nutrisi tinggi dan sering digunakan untuk meningkatkan produksi ASI."
-        else -> "Informasi untuk jenis daun '$label' tidak ditemukan."
+    // Menghapus angka dan spasi dari label jika ada (misal: "0 aligator" menjadi "aligator")
+    val cleanLabel = label.replace(Regex("^[0-9 ]+"), "")
+    return when (cleanLabel) {
+        "aligator" -> "Ciri daun nya berbentuk oval, panjang, ujungnya lancip, dan bagian sampingnya bergelombang."
+        "kendil" -> "Ciri daun nya berbentuk oval, panjang, bagian sampingnya rapi dan tidak bergelombang."
+        "mentega" -> "CIri daun nya berbentuk oval, lebih lebar, dan bagian sampingnya tidak bergelombang."
+        else -> "Informasi untuk jenis daun '$cleanLabel' tidak ditemukan."
     }
 }
 
