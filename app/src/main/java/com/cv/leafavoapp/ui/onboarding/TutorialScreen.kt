@@ -90,7 +90,6 @@ fun TutorialScreen(onFinished: () -> Unit) {
                     }
                 }
             }
-
         }
     }, content = {
         Column(Modifier.padding(it)) {

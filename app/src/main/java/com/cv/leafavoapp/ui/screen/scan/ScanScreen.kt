@@ -125,9 +125,14 @@ fun ScanScreen(
         onResult = { permissions ->
             allPermissionsGranted = permissions.values.all { it } // True jika semua izin diberikan
             if (allPermissionsGranted) {
-                Toast.makeText(context, "Izin kamera & penyimpanan diberikan!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Izin kamera & penyimpanan diberikan!", Toast.LENGTH_SHORT)
+                    .show()
             } else {
-                Toast.makeText(context, "Beberapa izin ditolak. Fitur mungkin terbatas.", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    context,
+                    "Beberapa izin ditolak. Fitur mungkin terbatas.",
+                    Toast.LENGTH_LONG
+                ).show()
                 // Anda bisa menambahkan logika untuk mengarahkan pengguna ke pengaturan aplikasi
                 // atau menampilkan dialog penjelasan yang lebih detail.
             }
@@ -176,7 +181,11 @@ fun ScanScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (!allPermissionsGranted && !arePermissionsGranted()) { // Cek izin sebelum meluncurkan
-            Toast.makeText(context, "Izin penyimpanan diperlukan untuk memilih gambar.", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                context,
+                "Izin penyimpanan diperlukan untuk memilih gambar.",
+                Toast.LENGTH_LONG
+            ).show()
             requestPermissions() // Minta izin jika belum ada
             return@rememberLauncherForActivityResult
         }
@@ -186,7 +195,7 @@ fun ScanScreen(
             descriptionText = ""
             try {
                 val originalBitmap = MediaStore.Images.Media.getBitmap(context.contentResolver, it)
-                bitmap = scaleBitmapDown(originalBitmap, 640)
+                bitmap = scaleBitmapDown(originalBitmap, 320)
             } catch (e: Exception) {
                 Log.e("ScanScreen", "Error loading image from URI: $it", e)
                 Toast.makeText(context, "Gagal memuat gambar.", Toast.LENGTH_SHORT).show()
@@ -199,14 +208,18 @@ fun ScanScreen(
         contract = ActivityResultContracts.TakePicturePreview()
     ) { capturedBitmap ->
         if (!allPermissionsGranted && !arePermissionsGranted()) { // Cek izin sebelum meluncurkan
-            Toast.makeText(context, "Izin kamera diperlukan untuk mengambil foto.", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                context,
+                "Izin kamera diperlukan untuk mengambil foto.",
+                Toast.LENGTH_LONG
+            ).show()
             requestPermissions() // Minta izin jika belum ada
             return@rememberLauncherForActivityResult
         }
         showResult = false
         resultText = ""
         descriptionText = ""
-        bitmap = capturedBitmap?.let { scaleBitmapDown(it, 640) }
+        bitmap = capturedBitmap?.let { scaleBitmapDown(it, 320) }
     }
 
     // Refresh status izin saat layar kembali aktif (opsional, tapi bisa berguna)
@@ -259,7 +272,7 @@ fun ScanScreen(
             ) {
                 // Title (kode Anda tetap sama)
                 Text(
-                    text = "Leaf Recognition & Detection",
+                    text = "Klasifikasi dan Deteksi",
                     style = MaterialTheme.typography.headlineMedium.copy(
                         fontWeight = FontWeight.Bold,
                         color = primaryColor
@@ -379,7 +392,11 @@ fun ScanScreen(
                 Button(
                     onClick = {
                         if (!allPermissionsGranted && !arePermissionsGranted()) {
-                            Toast.makeText(context, "Izin diperlukan untuk memindai.", Toast.LENGTH_LONG).show()
+                            Toast.makeText(
+                                context,
+                                "Izin diperlukan untuk memindai.",
+                                Toast.LENGTH_LONG
+                            ).show()
                             requestPermissions()
                             return@Button
                         }
@@ -395,7 +412,8 @@ fun ScanScreen(
                                     "dd-MM-yyyy HH:mm",
                                     java.util.Locale.getDefault()
                                 ).format(java.util.Date())
-                                val uriString = saveBitmapToInternalStorage(context, bmp, "classify")
+                                val uriString =
+                                    saveBitmapToInternalStorage(context, bmp, "classify")
                                 dataStoreHelper.addScanHistory("$uriString~${result.first}~$waktu")
                                 isScanning = false
                                 showResult = true
@@ -429,7 +447,8 @@ fun ScanScreen(
                             "ScanScreen",
                             "Beralih ke Deteksi Objek diklik. Nama model: leafavo_model_v5_final_converted.tflite"
                         )
-                        Toast.makeText(context, "Membuka Deteksi Objek...", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Membuka Deteksi Objek...", Toast.LENGTH_SHORT)
+                            .show()
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -524,7 +543,9 @@ fun ScanScreen(
                 Image(
                     painter = painterResource(id = R.drawable.ic_place_holder), // Ganti dengan ikon yang sesuai
                     contentDescription = "Izin Diperlukan",
-                    modifier = Modifier.size(100.dp).padding(bottom = 24.dp)
+                    modifier = Modifier
+                        .size(100.dp)
+                        .padding(bottom = 24.dp)
                 )
                 Text(
                     text = "Izin Diperlukan",
@@ -592,7 +613,7 @@ fun predictImage(context: Context, bitmap: Bitmap): Pair<String, String> {
     // 1. Konfigurasi options untuk Object Detector
     val options = ObjectDetector.ObjectDetectorOptions.builder()
         .setBaseOptions(BaseOptions.builder().build())
-        .setScoreThreshold(0.5f) // Ambang batas kepercayaan, bisa disesuaikan (misal: 0.5f = 50%)
+        .setScoreThreshold(0.8f) // Ambang batas kepercayaan, bisa disesuaikan (misal: 0.5f = 50%)
         .setMaxResults(3) // Maksimal jumlah objek yang dideteksi
         .build()
 
@@ -616,11 +637,17 @@ fun predictImage(context: Context, bitmap: Bitmap): Pair<String, String> {
 
             if (bestDetection != null) {
                 val category = bestDetection.categories.first()
-                val label = category.label
-                val score = category.score
-                val description = getDescription(label) // Menggunakan fungsi getDescription Anda yang sudah ada
+                val rawLabel = category.label // Ambil label mentah dari model
 
-                val resultString = "$label (%.2f%%)".format(score * 100)
+                // BERSIHKAN LABEL DI SINI
+                val cleanLabel = rawLabel.trim() // Hapus spasi di awal dan akhir
+
+                val score = category.score
+
+                // Gunakan label yang sudah bersih untuk semuanya
+                val description = getDescription(cleanLabel)
+                val resultString = "$cleanLabel (%.2f%%)".format(score * 100)
+
                 return Pair(resultString, description)
             } else {
                 return Pair("Tidak Dikenali", "Gagal memproses hasil deteksi.")
@@ -636,12 +663,12 @@ fun predictImage(context: Context, bitmap: Bitmap): Pair<String, String> {
 
 
 fun getDescription(label: String): String {
-    // Menghapus angka dan spasi dari label jika ada (misal: "0 aligator" menjadi "aligator")
-    val cleanLabel = label.replace(Regex("^[0-9 ]+"), "")
+    val cleanLabel = label.replace(Regex("^[0-9 ]+"), "").trim().lowercase()
+
     return when (cleanLabel) {
-        "aligator" -> "Ciri daun nya berbentuk oval, panjang, ujungnya lancip, dan bagian sampingnya bergelombang."
-        "kendil" -> "Ciri daun nya berbentuk oval, panjang, bagian sampingnya rapi dan tidak bergelombang."
-        "mentega" -> "CIri daun nya berbentuk oval, lebih lebar, dan bagian sampingnya tidak bergelombang."
+        "mentega" -> "Ciri daunnya panjang, tekstur daunnya halus dan bagian sampingnya tidak bergelombang."
+        "aligator" -> "Ciri daunnya, panjang, ujungnya lancip, dan bagian sampingnya bergelombang."
+        "kendil" -> "Ciri daunnya berbentuk oval dan sedikit melingkar dan bagian sampingnya tidak bergelombang."
         else -> "Informasi untuk jenis daun '$cleanLabel' tidak ditemukan."
     }
 }
